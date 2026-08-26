@@ -14,7 +14,7 @@ class FXMacroDataCalendarFeed:
     def __init__(
         self,
         api_key: str | None = None,
-        base_url: str = "https://fxmacrodata.com/api/v1",
+        base_url: str = "https://api.fxmacrodata.com/v1",
         timeout: int = 20,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.getenv("FXMD_API_KEY")
