@@ -29,22 +29,24 @@ class FXMacroDataCalendarFeed:
         top_tier_only: bool = False,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {}
-        if self.api_key:
-            params["api_key"] = self.api_key
         if start_date:
             params["start_date"] = start_date
         if end_date:
             params["end_date"] = end_date
         query = f"?{urlencode(params)}" if params else ""
-        request = Request(
-            f"{self.base_url}/calendar/{currency.lower()}{query}",
-            headers={"Accept": "application/json", "User-Agent": "ai-trader-fxmacrodata"},
-        )
+        headers = {"Accept": "application/json", "User-Agent": "ai-trader-fxmacrodata"}
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        request = Request(f"{self.base_url}/calendar/{currency.lower()}{query}", headers=headers)
         with urlopen(request, timeout=self.timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
         rows = list(payload.get("data") or [])
         if top_tier_only:
-            rows = [row for row in rows if row.get("top_tier_for_currency") or row.get("market_tier") == 1]
+            rows = [
+                row
+                for row in rows
+                if row.get("top_tier_for_currency") or row.get("market_tier") == 1
+            ]
         return rows
 
     def has_event_near(
@@ -74,4 +76,3 @@ def _parse_event_time(row: dict[str, Any]) -> datetime | None:
     if not value:
         return None
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-
