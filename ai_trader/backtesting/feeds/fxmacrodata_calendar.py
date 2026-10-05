@@ -17,7 +17,7 @@ class FXMacroDataCalendarFeed:
         base_url: str = "https://api.fxmacrodata.com/v1",
         timeout: int = 20,
     ) -> None:
-        self.api_key = api_key if api_key is not None else os.getenv("FXMD_API_KEY")
+        self.api_key = _clean_api_key(api_key if api_key is not None else os.getenv("FXMD_API_KEY"))
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
@@ -35,12 +35,17 @@ class FXMacroDataCalendarFeed:
             params["end_date"] = end_date
         query = f"?{urlencode(params)}" if params else ""
         headers = {"Accept": "application/json", "User-Agent": "ai-trader-fxmacrodata"}
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
         request = Request(f"{self.base_url}/calendar/{currency.lower()}{query}", headers=headers)
+        if self.api_key:
+            # Unredirected, so urllib never forwards the key on a redirect to another host.
+            request.add_unredirected_header("X-API-Key", self.api_key)
         with urlopen(request, timeout=self.timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        rows = list(payload.get("data") or [])
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+            raise ValueError(f"Unexpected FXMacroData calendar response{f': {detail}' if detail else ''}")
+        rows = [row for row in data if isinstance(row, dict)]
         if top_tier_only:
             rows = [
                 row
@@ -69,6 +74,16 @@ class FXMacroDataCalendarFeed:
             if event_time and event_time - before <= timestamp <= event_time + after:
                 return True
         return False
+
+
+def _clean_api_key(api_key: str | None) -> str | None:
+    if not api_key:
+        return None
+    api_key = api_key.strip()
+    if any(char.isspace() or not char.isprintable() for char in api_key):
+        # Keep the key itself out of the message.
+        raise ValueError("FXMacroData API key contains whitespace or control characters")
+    return api_key or None
 
 
 def _parse_event_time(row: dict[str, Any]) -> datetime | None:
